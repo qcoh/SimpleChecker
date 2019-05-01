@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-project(llvm_static_analyzer)
+project(autosar_checker)
 
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
@@ -14,18 +14,10 @@ message(STATUS "Use LLVM includes from ${LLVM_INCLUDE_DIRS}")
 add_definitions(${LLVM_DEFINITIONS})
 message(STATUS "Use LLVM definitions ${LLVM_DEFINITIONS}")
 
-add_library(llvm_static_analyzer SHARED
-	llvm_static_analyzer.cpp
+add_library(autosar_checker SHARED
+	StaticNonPODChecker.cpp
 )
 
-target_link_libraries(llvm_static_analyzer PRIVATE
+target_link_libraries(autosar_checker PRIVATE
 	LLVM
 )
-
-# this shit doesnt work
-#add_llvm_library(llvm_static_analyzer MODULE
-#       llvm_static_analyzer.cpp
-#      
-#       PLUGIN_TOOL
-#       clang
-#)
