@@ -4,9 +4,7 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistration.h"
 #include "clang/StaticAnalyzer/Core/CheckerRegistry.h"
-
-#include <stdlib.h>
-#include <iostream>
+#include "clang/AST/Decl.h"
 
 using namespace clang;
 using namespace ento;
@@ -14,33 +12,48 @@ using namespace ento;
 namespace
 {
 
-class FooChecker : public Checker<check::PreCall>
+// Check for Autosar rule A3-3-2:
+//
+// Rule A3-3-2 (required, implementation, automated)
+// Non-POD type objects with static storage duration shall not be used.
+//
+// Checks every variable declartion whether it has static storage duration
+// and whether its type is non-POD.
+class StaticNonPODChecker : public Checker<check::ASTDecl<VarDecl>>
 {
       private:
-	std::unique_ptr<BugType> m_mallocBug;
+	std::unique_ptr<BugType> m_staticNonPODBugType;
 
       public:
-	FooChecker() : m_mallocBug{std::make_unique<BugType>(this, "Used malloc", "Foo error")}
+	StaticNonPODChecker() : m_staticNonPODBugType{std::make_unique<BugType>(this, "Declared non-POD variable with static storage duration", "AUTOSAR ERROR")}
 	{
-		malloc(1);
-
-		std::cout << "FOOCHECKER\n";
 	}
 
-	void checkPreCall(const CallEvent &call, CheckerContext &C) const
+	void checkASTDecl(const VarDecl *varDecl, AnalysisManager &analysisManager, BugReporter &bugReporter) const
 	{
-		if (call.isGlobalCFunction("malloc"))
+		if (!varDecl)
 		{
-			ExplodedNode *ErrNode = C.generateErrorNode();
-
-			auto R = llvm::make_unique<BugReport>(*m_mallocBug, "Using malloc", ErrNode);
-			R->addRange(call.getSourceRange());
-			R->markInteresting(call.getArgSVal(0).getAsSymbol());
-			C.emitReport(std::move(R));
+			return;
 		}
 
-		// always a bug, default checker
-		//int i = *(int*)NULL;
+		const bool hasStaticStorageDuration = varDecl->isStaticLocal() || varDecl->isStaticDataMember();
+
+		ASTContext &astContext = varDecl->getASTContext();
+		const bool isPOD = varDecl->getType().isPODType(astContext);
+
+		if (hasStaticStorageDuration && !isPOD)
+		{
+			PathDiagnosticLocation pathDiagnosticLocation =
+			    PathDiagnosticLocation::create(varDecl, bugReporter.getSourceManager());
+
+			bugReporter.EmitBasicReport(
+			    varDecl,
+			    this,
+			    "A3-3-2",
+			    "Required (AUTOSAR)",
+			    "Non-POD type objects with static storage duration shall not be used.",
+			    pathDiagnosticLocation);
+		}
 	}
 };
 
@@ -48,9 +61,9 @@ class FooChecker : public Checker<check::PreCall>
 
 extern "C" void clang_registerCheckers(CheckerRegistry &registry)
 {
-	registry.addChecker<FooChecker>("fuck.FooChecker", "does some shit");
-
-	std::cout << "FOOCHECKER\n";
+	registry.addChecker<StaticNonPODChecker>(
+	    "autosar.A3-3-2",
+	    "Non-POD type objects with static storage duration shall not be used.");
 }
 
 extern "C" const char clang_analyzerAPIVersionString[] = CLANG_ANALYZER_API_VERSION_STRING;
