@@ -6,29 +6,26 @@
 #include "clang/StaticAnalyzer/Core/CheckerRegistry.h"
 #include "clang/AST/Decl.h"
 
+#include <iostream>
+
 using namespace clang;
 using namespace ento;
 
 namespace
 {
 
-// Check for Autosar rule A3-3-2:
-//
 // Rule A3-3-2 (required, implementation, automated)
 // Non-POD type objects with static storage duration shall not be used.
-//
-// Checks every variable declartion whether it has static storage duration
-// and whether its type is non-POD.
-class StaticNonPODChecker : public Checker<check::ASTDecl<VarDecl>>
+class SimpleChecker : public Checker<check::ASTDecl<VarDecl>>
 {
-      private:
-	std::unique_ptr<BugType> m_staticNonPODBugType;
+private:
+	std::unique_ptr<BugType> m_bugType{
+	    std::make_unique<BugType>(
+		this,
+		"Non-POD type objects with static storage duration shall not be used.",
+		"Autosar required")};
 
-      public:
-	StaticNonPODChecker() : m_staticNonPODBugType{std::make_unique<BugType>(this, "Declared non-POD variable with static storage duration", "AUTOSAR ERROR")}
-	{
-	}
-
+public:
 	void checkASTDecl(const VarDecl *varDecl, AnalysisManager &analysisManager, BugReporter &bugReporter) const
 	{
 		if (!varDecl)
@@ -36,8 +33,13 @@ class StaticNonPODChecker : public Checker<check::ASTDecl<VarDecl>>
 			return;
 		}
 
-		const bool hasStaticStorageDuration = varDecl->isStaticLocal() || varDecl->isStaticDataMember();
+		const bool isConstexpr = varDecl->isConstexpr();
+		if (isConstexpr)
+		{
+			return;
+		}
 
+		const bool hasStaticStorageDuration = varDecl->isStaticLocal() || varDecl->isStaticDataMember() || varDecl->hasGlobalStorage();
 		ASTContext &astContext = varDecl->getASTContext();
 		const bool isPOD = varDecl->getType().isPODType(astContext);
 
@@ -46,22 +48,20 @@ class StaticNonPODChecker : public Checker<check::ASTDecl<VarDecl>>
 			PathDiagnosticLocation pathDiagnosticLocation =
 			    PathDiagnosticLocation::create(varDecl, bugReporter.getSourceManager());
 
-			bugReporter.EmitBasicReport(
-			    varDecl,
-			    this,
-			    "A3-3-2",
-			    "Required (AUTOSAR)",
-			    "Non-POD type objects with static storage duration shall not be used.",
-			    pathDiagnosticLocation);
+			bugReporter.emitReport(
+			    std::make_unique<BugReport>(
+				*m_bugType,
+				m_bugType->getName(),
+				pathDiagnosticLocation));
 		}
 	}
-};
+}; // namespace
 
 } // namespace
 
 extern "C" void clang_registerCheckers(CheckerRegistry &registry)
 {
-	registry.addChecker<StaticNonPODChecker>(
+	registry.addChecker<SimpleChecker>(
 	    "autosar.A3-3-2",
 	    "Non-POD type objects with static storage duration shall not be used.");
 }
