@@ -6,8 +6,6 @@
 #include "clang/StaticAnalyzer/Core/CheckerRegistry.h"
 #include "clang/AST/Decl.h"
 
-#include <iostream>
-
 using namespace clang;
 using namespace ento;
 
@@ -55,7 +53,7 @@ public:
 				pathDiagnosticLocation));
 		}
 	}
-}; // namespace
+};
 
 } // namespace
 
