@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS NO)
 
 find_package(LLVM REQUIRED CONFIG)
-include_directories(${LLVM_INCLUDE_DIRS})
 
 add_library(simple_checker SHARED
 	SimpleChecker.cpp
@@ -15,3 +14,7 @@ add_library(simple_checker SHARED
 target_link_libraries(simple_checker PRIVATE
 	LLVM
 )
+
+target_include_directories(simple_checker PRIVATE
+	${LLVM_INCLUDE_DIRS})
+
